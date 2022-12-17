@@ -13,12 +13,15 @@ class Order(models.Model):
     payment_amount = models.FloatField()
     net_discount = models.FloatField()
     bill_amount = models.FloatField()
-    taxes = models.JSONField(default=dict)
+    taxes = models.FloatField()
     order_date_time = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = 'order'
         verbose_name_plural = 'Orders'
+
+    def __str__(self):
+        return self.order_id + " " + self.user.first_name
 
 
 class OrderDetail(models.Model):
@@ -32,6 +35,9 @@ class OrderDetail(models.Model):
         verbose_name = 'order_detail'
         verbose_name_plural = 'Order Details'
 
+    def __str__(self):
+        return str(self.order)
+
 
 class OrderLock(models.Model):
     lock = models.BooleanField(default=False)
@@ -39,3 +45,6 @@ class OrderLock(models.Model):
     class Meta:
         verbose_name = 'order_lock'
         verbose_name_plural = 'Order Lock'
+
+    def __str__(self):
+        return str(self.lock)

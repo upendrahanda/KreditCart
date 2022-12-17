@@ -12,8 +12,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from KreditCart.paginations import CustomPagination
-from products.models import Stock
-from .models import Order, OrderLock
+from products.models import Stock, Product
+from .models import Order, OrderLock, OrderDetail
 from .serializers import OrderSerializer
 
 
@@ -59,30 +59,54 @@ class OrderViewSet(viewsets.ModelViewSet):
                 product_name = stock.product.name
                 product_quantity = stock.quantity
                 if product_quantity < quantity:
+                    order_lock.lock = False
+                    order_lock.save()
                     return Response({"error": "Requested quantity {0} for the product {1} is not available. Only {2} "
                                               "left".format(quantity, product_name, product_quantity)},
                                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 else:
                     data = request.data
-                    data["order_id"] = str(datetime.datetime.utcnow())
-                    serializer = self.get_serializer(data=request.data)
-                    serializer.is_valid(raise_exception=True)
-                    serializer.save()
+                    order_id = str(datetime.datetime.utcnow())
+                    order_id = order_id.replace(":", "")
+                    order_id = order_id.replace("-", "")
+                    order_id = order_id.replace(" ", "")
+                    order_id = order_id.replace(".", "")
+                    data["order_id"] = order_id
+                    payable_amount = 0
+                    net_discount = 0
                     with transaction.atomic():
                         try:
+                            data["payment_amount"] = payable_amount
+                            taxes = payable_amount*0.18
+                            data["taxes"] = taxes
+                            data["bill_amount"] = payable_amount + taxes
+                            data["net_discount"] = net_discount
+                            data["user"] = request.user.user_id
+                            serializer = self.get_serializer(data=data)
+                            serializer.is_valid(raise_exception=True)
+                            resp = serializer.save()
                             for sku, quantity in data.get('items').items():
                                 stock = Stock.objects.get(product__sku=sku)
+                                product = Product.objects.get(sku=sku)
+                                discount = product.price * 0.10
+                                order_detail = OrderDetail(order_id=resp.id, product_id=product.id, quantity=quantity, discount=discount)
+                                payable_amount += product.price - discount
+                                net_discount += discount
                                 stock.quantity -= quantity
                                 stock.save()
-                                order_lock.lock = False
-                                order_lock.save()
+                                order_detail.save()
+                            order_lock.lock = False
+                            order_lock.save()
                             return Response(serializer.data, status=status.HTTP_201_CREATED)
                         except Exception as e:
+                            order_lock.lock = False
+                            order_lock.save()
                             print(e)
                             return Response(
                                 {"error": "Some internal error occurred"},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except:  # revoke the lock if error occurs
+        except Exception as e:  # revoke the lock if error occurs
+            print(e)
             order_lock.lock = False
             order_lock.save()
             return Response(

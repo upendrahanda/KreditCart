@@ -30,18 +30,19 @@ class Stock(models.Model):
         verbose_name_plural = 'Stocks'
 
     def __str__(self):
-        return self.product.name + str(self.quantity)
+        return self.product.name + " " + str(self.quantity)
 
 
 class StockHistory(models.Model):
     id = models.CharField(default=generate_unique_object_id, primary_key=True, max_length=24)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
-    added_by = models.ForeignKey(CustomUser, limit_choices_to={'groups': 'admin'}, on_delete=models.CASCADE, related_name='added_by')
+    added_by = models.ForeignKey(CustomUser, limit_choices_to={'groups': 'admin'}, on_delete=models.CASCADE,
+                                 related_name='added_by')
 
     class Meta:
         verbose_name = 'stock_history'
         verbose_name_plural = 'Stock History'
 
     def __str__(self):
-        return self.product.name + str(self.quantity)
+        return self.product.name + " " + str(self.quantity)
