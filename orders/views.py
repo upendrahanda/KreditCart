@@ -76,25 +76,39 @@ class OrderViewSet(viewsets.ModelViewSet):
                     net_discount = 0
                     with transaction.atomic():
                         try:
-                            data["payment_amount"] = payable_amount
-                            taxes = payable_amount*0.18
-                            data["taxes"] = taxes
-                            data["bill_amount"] = payable_amount + taxes
-                            data["net_discount"] = net_discount
+                            data["payment_amount"] = 0
+                            data["taxes"] = 0
+                            data["bill_amount"] = 0
+                            data["net_discount"] = 0
                             data["user"] = request.user.user_id
+
                             serializer = self.get_serializer(data=data)
                             serializer.is_valid(raise_exception=True)
                             resp = serializer.save()
+
                             for sku, quantity in data.get('items').items():
                                 stock = Stock.objects.get(product__sku=sku)
                                 product = Product.objects.get(sku=sku)
-                                discount = product.price * 0.10
+                                discount = product.price * 0.10  # assuming 10% discount, but can implement dynamic
+                                # discounts or coupon based even
                                 order_detail = OrderDetail(order_id=resp.id, product_id=product.id, quantity=quantity, discount=discount)
                                 payable_amount += product.price - discount
                                 net_discount += discount
                                 stock.quantity -= quantity
                                 stock.save()
                                 order_detail.save()
+
+                            data["payment_amount"] = payable_amount
+                            taxes = payable_amount*0.18
+                            data["taxes"] = taxes  # assuming, but we can implement dynamic tax-slabs
+                            data["bill_amount"] = payable_amount + taxes
+                            data["net_discount"] = net_discount
+                            data["user"] = request.user.user_id
+
+                            serializer = self.get_serializer(resp, data=data)
+                            serializer.is_valid(raise_exception=True)
+                            serializer.save()
+
                             order_lock.lock = False
                             order_lock.save()
                             return Response(serializer.data, status=status.HTTP_201_CREATED)
